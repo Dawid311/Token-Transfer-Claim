@@ -237,13 +237,15 @@ app.use((req, res) => {
   });
 });
 
-// Server starten
-app.listen(PORT, () => {
-  console.log(`🚀 Token Transfer API läuft auf Port ${PORT}`);
-  console.log(`📝 Health Check: http://localhost:${PORT}/health`);
-  console.log(`🔗 Netzwerk: Base Chain`);
-  console.log(`🪙 Token: ${TOKEN_CONFIG.address}`);
-  console.log(`📊 Decimals: ${TOKEN_CONFIG.decimals}`);
-});
+// Server starten (nur für lokale Entwicklung)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Token Transfer API läuft auf Port ${PORT}`);
+    console.log(`📝 Health Check: http://localhost:${PORT}/health`);
+    console.log(`🔗 Netzwerk: Base Chain`);
+    console.log(`🪙 Token: ${TOKEN_CONFIG.address}`);
+    console.log(`📊 Decimals: ${TOKEN_CONFIG.decimals}`);
+  });
+}
 
 module.exports = app;
