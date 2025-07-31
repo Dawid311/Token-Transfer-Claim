@@ -66,17 +66,26 @@ const TOKEN_CONFIG = {
   ]
 };
 
-// Private Key Setup
-if (!process.env.PRIVATE_KEY) {
-  console.error('PRIVATE_KEY Umgebungsvariable ist erforderlich!');
-  process.exit(1);
+// Private Key Setup - Lazy Loading für Vercel
+let account = null;
+let tokenContract = null;
+
+function initializeWeb3() {
+  if (!process.env.PRIVATE_KEY) {
+    throw new Error('PRIVATE_KEY Umgebungsvariable ist erforderlich!');
+  }
+  
+  if (!account) {
+    account = web3.eth.accounts.privateKeyToAccount(process.env.PRIVATE_KEY);
+    web3.eth.accounts.wallet.add(account);
+  }
+  
+  if (!tokenContract) {
+    tokenContract = new web3.eth.Contract(TOKEN_CONFIG.abi, TOKEN_CONFIG.address);
+  }
+  
+  return { account, tokenContract };
 }
-
-const account = web3.eth.accounts.privateKeyToAccount(process.env.PRIVATE_KEY);
-web3.eth.accounts.wallet.add(account);
-
-// Token Contract Instance
-const tokenContract = new web3.eth.Contract(TOKEN_CONFIG.abi, TOKEN_CONFIG.address);
 
 // Utility Funktionen
 function validateEthereumAddress(address) {
@@ -109,6 +118,7 @@ app.get('/health', (req, res) => {
 // Token Balance abfragen
 app.get('/balance/:address', async (req, res) => {
   try {
+    const { tokenContract } = initializeWeb3();
     const { address } = req.params;
     
     if (!validateEthereumAddress(address)) {
@@ -138,6 +148,7 @@ app.get('/balance/:address', async (req, res) => {
 // Token Transfer
 app.post('/transfer', async (req, res) => {
   try {
+    const { account, tokenContract } = initializeWeb3();
     const { amount, walletAddress } = req.body;
 
     // Eingabevalidierung
