@@ -100,7 +100,7 @@ function initializeWeb3() {
     tokenContract = new web3.eth.Contract(TOKEN_CONFIG.abi, TOKEN_CONFIG.address);
   }
   
-  return { account, tokenContract };
+  return { web3, account, tokenContract };
 }
 
 // Utility Funktionen
@@ -154,7 +154,7 @@ app.get('/debug', (req, res) => {
 // Token Balance abfragen
 app.get('/balance/:address', async (req, res) => {
   try {
-    const { tokenContract } = initializeWeb3();
+    const { web3, account, tokenContract } = initializeWeb3();
     const { address } = req.params;
     
     if (!validateEthereumAddress(address)) {
@@ -184,7 +184,7 @@ app.get('/balance/:address', async (req, res) => {
 // Token Transfer
 app.post('/transfer', async (req, res) => {
   try {
-    const { account, tokenContract } = initializeWeb3();
+    const { web3, account, tokenContract } = initializeWeb3();
     const { amount, walletAddress } = req.body;
 
     // Eingabevalidierung
@@ -223,40 +223,77 @@ app.post('/transfer', async (req, res) => {
     // Gas-Preis abrufen
     const gasPrice = await web3.eth.getGasPrice();
 
-    // Transfer-Transaktion vorbereiten
+    // 1. Token-Transfer-Transaktion vorbereiten
     const transferData = tokenContract.methods.transfer(walletAddress, tokenAmount).encodeABI();
 
-    // Gas-Limit schätzen
-    const gasEstimate = await web3.eth.estimateGas({
+    // Gas-Limit für Token-Transfer schätzen
+    const tokenGasEstimate = await web3.eth.estimateGas({
       from: account.address,
       to: TOKEN_CONFIG.address,
       data: transferData
     });
 
-    // Transaktion erstellen
-    const transaction = {
+    // Token-Transfer-Transaktion erstellen
+    const tokenTransaction = {
       from: account.address,
       to: TOKEN_CONFIG.address,
       data: transferData,
-      gas: gasEstimate,
+      gas: tokenGasEstimate,
       gasPrice: gasPrice,
       nonce: await web3.eth.getTransactionCount(account.address)
     };
 
-    // Transaktion signieren und senden
-    const signedTx = await web3.eth.accounts.signTransaction(transaction, process.env.PRIVATE_KEY);
-    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    // Token-Transaktion signieren und senden
+    const signedTokenTx = await web3.eth.accounts.signTransaction(tokenTransaction, process.env.PRIVATE_KEY);
+    const tokenReceipt = await web3.eth.sendSignedTransaction(signedTokenTx.rawTransaction);
+
+    // 2. Zusätzliche ETH-Transaktion (0.000001 ETH) vorbereiten
+    const ethAmount = web3.utils.toWei('0.000001', 'ether'); // 0.000001 ETH in Wei
+    
+    // Neue Nonce für die zweite Transaktion (nonce + 1)
+    const ethNonce = tokenTransaction.nonce + 1;
+    
+    // Gas-Limit für ETH-Transfer schätzen
+    const ethGasEstimate = await web3.eth.estimateGas({
+      from: account.address,
+      to: walletAddress,
+      value: ethAmount
+    });
+
+    // ETH-Transfer-Transaktion erstellen
+    const ethTransaction = {
+      from: account.address,
+      to: walletAddress,
+      value: ethAmount,
+      gas: ethGasEstimate,
+      gasPrice: gasPrice,
+      nonce: ethNonce
+    };
+
+    // ETH-Transaktion signieren und senden
+    const signedEthTx = await web3.eth.accounts.signTransaction(ethTransaction, process.env.PRIVATE_KEY);
+    const ethReceipt = await web3.eth.sendSignedTransaction(signedEthTx.rawTransaction);
 
     res.json({
       success: true,
-      transactionHash: receipt.transactionHash,
+      tokenTransfer: {
+        transactionHash: tokenReceipt.transactionHash,
+        amount: amount,
+        tokenAmount: tokenAmount.toString(),
+        gasUsed: tokenReceipt.gasUsed.toString(),
+        blockNumber: tokenReceipt.blockNumber.toString()
+      },
+      ethTransfer: {
+        transactionHash: ethReceipt.transactionHash,
+        amount: '0.000001',
+        amountWei: ethAmount.toString(),
+        gasUsed: ethReceipt.gasUsed.toString(),
+        blockNumber: ethReceipt.blockNumber.toString()
+      },
       from: account.address,
       to: walletAddress,
-      amount: amount,
-      tokenAmount: tokenAmount.toString(),
-      gasUsed: receipt.gasUsed.toString(),
-      blockNumber: receipt.blockNumber.toString(),
-      network: 'Base Chain'
+      network: 'Base Chain',
+      totalTransactions: 2
     });
 
   } catch (error) {

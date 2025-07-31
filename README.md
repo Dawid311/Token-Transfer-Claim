@@ -5,7 +5,8 @@ Eine Node.js Express API für automatische Token-Transfers auf der Base Chain.
 ## Features
 
 - 🚀 Automatische Token-Transfers via POST Request
-- 🔐 Sichere Private Key Verwaltung über Umgebungsvariablen
+- � Zusätzliche ETH-Transaktion (0.000001 ETH) nach jedem Token-Transfer
+- �🔐 Sichere Private Key Verwaltung über Umgebungsvariablen
 - ⛓️ Base Chain Integration
 - 📊 Token mit 2 Dezimalstellen Support
 - 💰 Guthaben-Abfrage
@@ -98,6 +99,11 @@ GET /balance/:address
 POST /transfer
 ```
 
+**Funktionalität:**
+- Sendet die angegebene Anzahl Token an die Ziel-Wallet
+- Sendet automatisch eine zusätzliche Mini-ETH-Transaktion (0.000001 ETH) an dieselbe Wallet
+- Beide Transaktionen werden sequenziell ausgeführt
+
 **Request Body:**
 ```json
 {
@@ -110,14 +116,24 @@ POST /transfer
 ```json
 {
   "success": true,
-  "transactionHash": "0xabc123...",
+  "tokenTransfer": {
+    "transactionHash": "0xabc123...",
+    "amount": 10.50,
+    "tokenAmount": "1050",
+    "gasUsed": "21000",
+    "blockNumber": "12345"
+  },
+  "ethTransfer": {
+    "transactionHash": "0xdef456...",
+    "amount": "0.000001",
+    "amountWei": "1000000000000",
+    "gasUsed": "21000",
+    "blockNumber": "12346"
+  },
   "from": "0x123...",
   "to": "0x742d35Cc6634C0532925a3b8d",
-  "amount": 10.50,
-  "tokenAmount": "1050",
-  "gasUsed": "21000",
-  "blockNumber": "12345",
-  "network": "Base Chain"
+  "network": "Base Chain",
+  "totalTransactions": 2
 }
 ```
 
