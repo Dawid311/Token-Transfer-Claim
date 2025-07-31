@@ -76,7 +76,23 @@ function initializeWeb3() {
   }
   
   if (!account) {
-    account = web3.eth.accounts.privateKeyToAccount(process.env.PRIVATE_KEY);
+    // Private Key formatieren - sicherstellen dass er mit 0x beginnt
+    let privateKey = process.env.PRIVATE_KEY.trim();
+    if (!privateKey.startsWith('0x')) {
+      privateKey = '0x' + privateKey;
+    }
+    
+    // Private Key validieren (muss 66 Zeichen lang sein: 0x + 64 hex Zeichen)
+    if (privateKey.length !== 66) {
+      throw new Error(`Private Key muss 64 Hex-Zeichen lang sein. Aktuell: ${privateKey.length - 2} Zeichen`);
+    }
+    
+    // Überprüfen ob es nur gültige Hex-Zeichen enthält
+    if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
+      throw new Error('Private Key enthält ungültige Zeichen. Nur Hex-Zeichen (0-9, a-f, A-F) sind erlaubt.');
+    }
+    
+    account = web3.eth.accounts.privateKeyToAccount(privateKey);
     web3.eth.accounts.wallet.add(account);
   }
   
@@ -113,6 +129,26 @@ app.get('/health', (req, res) => {
     network: 'Base Chain',
     token: TOKEN_CONFIG.address
   });
+});
+
+// Debug Endpoint - nur für Entwicklung!
+app.get('/debug', (req, res) => {
+  try {
+    const privateKeyLength = process.env.PRIVATE_KEY ? process.env.PRIVATE_KEY.trim().length : 0;
+    const privateKeyPrefix = process.env.PRIVATE_KEY ? process.env.PRIVATE_KEY.trim().substring(0, 4) : 'N/A';
+    
+    res.json({
+      privateKeyExists: !!process.env.PRIVATE_KEY,
+      privateKeyLength: privateKeyLength,
+      privateKeyPrefix: privateKeyPrefix,
+      rpcUrl: process.env.RPC_URL || 'https://mainnet.base.org'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Debug-Fehler',
+      message: error.message
+    });
+  }
 });
 
 // Token Balance abfragen
