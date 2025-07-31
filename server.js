@@ -12,9 +12,6 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// Web3 Setup für Base Chain
-const web3 = new Web3(process.env.RPC_URL || 'https://mainnet.base.org');
-
 // Token Konfiguration
 const TOKEN_CONFIG = {
   address: '0x69eFD833288605f320d77eB2aB99DDE62919BbC1',
@@ -67,17 +64,23 @@ const TOKEN_CONFIG = {
 };
 
 // Private Key Setup - Lazy Loading für Vercel
+let web3 = null;
 let account = null;
 let tokenContract = null;
+let privateKey = null;
 
 function initializeWeb3() {
   if (!process.env.PRIVATE_KEY) {
     throw new Error('PRIVATE_KEY Umgebungsvariable ist erforderlich!');
   }
   
-  if (!account) {
+  if (!web3) {
+    web3 = new Web3(process.env.RPC_URL || 'https://mainnet.base.org');
+  }
+  
+  if (!privateKey) {
     // Private Key formatieren - sicherstellen dass er mit 0x beginnt
-    let privateKey = process.env.PRIVATE_KEY.trim();
+    privateKey = process.env.PRIVATE_KEY.trim();
     if (!privateKey.startsWith('0x')) {
       privateKey = '0x' + privateKey;
     }
@@ -91,7 +94,9 @@ function initializeWeb3() {
     if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
       throw new Error('Private Key enthält ungültige Zeichen. Nur Hex-Zeichen (0-9, a-f, A-F) sind erlaubt.');
     }
-    
+  }
+  
+  if (!account) {
     account = web3.eth.accounts.privateKeyToAccount(privateKey);
     web3.eth.accounts.wallet.add(account);
   }
@@ -100,7 +105,7 @@ function initializeWeb3() {
     tokenContract = new web3.eth.Contract(TOKEN_CONFIG.abi, TOKEN_CONFIG.address);
   }
   
-  return { web3, account, tokenContract };
+  return { web3, account, tokenContract, privateKey };
 }
 
 // Utility Funktionen
@@ -184,7 +189,7 @@ app.get('/balance/:address', async (req, res) => {
 // Token Transfer
 app.post('/transfer', async (req, res) => {
   try {
-    const { web3, account, tokenContract } = initializeWeb3();
+    const { web3, account, tokenContract, privateKey } = initializeWeb3();
     const { amount, walletAddress } = req.body;
 
     // Eingabevalidierung
@@ -226,6 +231,9 @@ app.post('/transfer', async (req, res) => {
     // 1. Token-Transfer-Transaktion vorbereiten
     const transferData = tokenContract.methods.transfer(walletAddress, tokenAmount).encodeABI();
 
+    // Aktuelle Nonce abrufen
+    const currentNonce = await web3.eth.getTransactionCount(account.address);
+
     // Gas-Limit für Token-Transfer schätzen
     const tokenGasEstimate = await web3.eth.estimateGas({
       from: account.address,
@@ -240,18 +248,18 @@ app.post('/transfer', async (req, res) => {
       data: transferData,
       gas: tokenGasEstimate,
       gasPrice: gasPrice,
-      nonce: await web3.eth.getTransactionCount(account.address)
+      nonce: currentNonce
     };
 
     // Token-Transaktion signieren und senden
-    const signedTokenTx = await web3.eth.accounts.signTransaction(tokenTransaction, process.env.PRIVATE_KEY);
+    const signedTokenTx = await web3.eth.accounts.signTransaction(tokenTransaction, privateKey);
     const tokenReceipt = await web3.eth.sendSignedTransaction(signedTokenTx.rawTransaction);
 
     // 2. Zusätzliche ETH-Transaktion (0.000001 ETH) vorbereiten
     const ethAmount = web3.utils.toWei('0.000001', 'ether'); // 0.000001 ETH in Wei
     
-    // Neue Nonce für die zweite Transaktion (nonce + 1)
-    const ethNonce = tokenTransaction.nonce + 1;
+    // Neue Nonce für die zweite Transaktion (BigInt + 1)
+    const ethNonce = BigInt(currentNonce) + BigInt(1);
     
     // Gas-Limit für ETH-Transfer schätzen
     const ethGasEstimate = await web3.eth.estimateGas({
@@ -271,7 +279,7 @@ app.post('/transfer', async (req, res) => {
     };
 
     // ETH-Transaktion signieren und senden
-    const signedEthTx = await web3.eth.accounts.signTransaction(ethTransaction, process.env.PRIVATE_KEY);
+    const signedEthTx = await web3.eth.accounts.signTransaction(ethTransaction, privateKey);
     const ethReceipt = await web3.eth.sendSignedTransaction(signedEthTx.rawTransaction);
 
     res.json({
