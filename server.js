@@ -258,6 +258,9 @@ app.post('/transfer', async (req, res) => {
     // 2. Zusätzliche ETH-Transaktion (0.000001 ETH) vorbereiten
     const ethAmount = web3.utils.toWei('0.000001', 'ether'); // 0.000001 ETH in Wei
     
+    // Kurz warten, damit die erste Transaktion verarbeitet wird
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 Sekunden warten
+    
     // Neue Nonce für die zweite Transaktion abrufen (nach der ersten Transaktion)
     const ethNonce = await web3.eth.getTransactionCount(account.address);
     
@@ -278,9 +281,29 @@ app.post('/transfer', async (req, res) => {
       nonce: ethNonce
     };
 
-    // ETH-Transaktion signieren und senden
-    const signedEthTx = await web3.eth.accounts.signTransaction(ethTransaction, privateKey);
-    const ethReceipt = await web3.eth.sendSignedTransaction(signedEthTx.rawTransaction);
+    // ETH-Transaktion versuchen zu senden (mit Fehlerbehandlung)
+    let ethTransferResult = null;
+    try {
+      const signedEthTx = await web3.eth.accounts.signTransaction(ethTransaction, privateKey);
+      const ethReceipt = await web3.eth.sendSignedTransaction(signedEthTx.rawTransaction);
+      
+      ethTransferResult = {
+        transactionHash: ethReceipt.transactionHash,
+        amount: '0.000001',
+        amountWei: ethAmount.toString(),
+        gasUsed: ethReceipt.gasUsed.toString(),
+        blockNumber: ethReceipt.blockNumber.toString(),
+        status: 'success'
+      };
+    } catch (ethError) {
+      console.error('ETH-Transfer fehlgeschlagen:', ethError.message);
+      ethTransferResult = {
+        status: 'failed',
+        error: ethError.message,
+        amount: '0.000001',
+        amountWei: ethAmount.toString()
+      };
+    }
 
     res.json({
       success: true,
@@ -289,19 +312,14 @@ app.post('/transfer', async (req, res) => {
         amount: amount,
         tokenAmount: tokenAmount.toString(),
         gasUsed: tokenReceipt.gasUsed.toString(),
-        blockNumber: tokenReceipt.blockNumber.toString()
+        blockNumber: tokenReceipt.blockNumber.toString(),
+        status: 'success'
       },
-      ethTransfer: {
-        transactionHash: ethReceipt.transactionHash,
-        amount: '0.000001',
-        amountWei: ethAmount.toString(),
-        gasUsed: ethReceipt.gasUsed.toString(),
-        blockNumber: ethReceipt.blockNumber.toString()
-      },
+      ethTransfer: ethTransferResult,
       from: account.address,
       to: walletAddress,
       network: 'Base Chain',
-      totalTransactions: 2
+      totalTransactions: ethTransferResult.status === 'success' ? 2 : 1
     });
 
   } catch (error) {

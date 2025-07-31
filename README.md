@@ -121,19 +121,46 @@ POST /transfer
     "amount": 10.50,
     "tokenAmount": "1050",
     "gasUsed": "21000",
-    "blockNumber": "12345"
+    "blockNumber": "12345",
+    "status": "success"
   },
   "ethTransfer": {
     "transactionHash": "0xdef456...",
     "amount": "0.000001",
     "amountWei": "1000000000000",
     "gasUsed": "21000",
-    "blockNumber": "12346"
+    "blockNumber": "12346",
+    "status": "success"
   },
   "from": "0x123...",
   "to": "0x742d35Cc6634C0532925a3b8d",
   "network": "Base Chain",
   "totalTransactions": 2
+}
+```
+
+**Response (Token erfolgreich, ETH fehlgeschlagen):**
+```json
+{
+  "success": true,
+  "tokenTransfer": {
+    "transactionHash": "0xabc123...",
+    "amount": 10.50,
+    "tokenAmount": "1050",
+    "gasUsed": "21000",
+    "blockNumber": "12345",
+    "status": "success"
+  },
+  "ethTransfer": {
+    "status": "failed",
+    "error": "insufficient funds for gas",
+    "amount": "0.000001",
+    "amountWei": "1000000000000"
+  },
+  "from": "0x123...",
+  "to": "0x742d35Cc6634C0532925a3b8d",
+  "network": "Base Chain",
+  "totalTransactions": 1
 }
 ```
 
