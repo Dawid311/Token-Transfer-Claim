@@ -258,8 +258,8 @@ app.post('/transfer', async (req, res) => {
     // 2. Zusätzliche ETH-Transaktion (0.000001 ETH) vorbereiten
     const ethAmount = web3.utils.toWei('0.000001', 'ether'); // 0.000001 ETH in Wei
     
-    // Neue Nonce für die zweite Transaktion (BigInt + 1)
-    const ethNonce = BigInt(currentNonce) + BigInt(1);
+    // Neue Nonce für die zweite Transaktion abrufen (nach der ersten Transaktion)
+    const ethNonce = await web3.eth.getTransactionCount(account.address);
     
     // Gas-Limit für ETH-Transfer schätzen
     const ethGasEstimate = await web3.eth.estimateGas({
